@@ -19,7 +19,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     with conn:
         print('Connected by', addr)
         while not shut_up:
-            data = conn.recv(2)
+            data = conn.recv(10)
             if not data:
                 break
             print(data)
