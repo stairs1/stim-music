@@ -49,7 +49,7 @@ void FirstVSTAudioProcessorEditor::paint (juce::Graphics& g)
 
     g.setColour (juce::Colours::white);
     g.setFont (15.0f);
-    g.drawFittedText ("CHECK DOUBLE CALL (actual)", getLocalBounds(), juce::Justification::centred, 1);
+    g.drawFittedText ("REMOTE CALL", getLocalBounds(), juce::Justification::centred, 1);
 }
 
 void FirstVSTAudioProcessorEditor::resized()

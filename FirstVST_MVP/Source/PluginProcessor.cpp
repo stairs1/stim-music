@@ -105,44 +105,27 @@ void FirstVSTAudioProcessor::changeProgramName (int index, const juce::String& n
 }
 
 //==============================================================================
-//volatile int set_me = 1;
-atomic_int set_me(1);
-int memory_trace = 0;
-
-//void sendToCivilization(juce::StreamingSocket *srv, int& sm, int& mt) {
-//    // Server, info, tcp connection...
-//    std::string message = " lelele";
-//    char const *c = message.c_str();
-//    int cnte = 0;
-//
-//    if(true){
-//        if(sm != mt) {
-//            mt++;
-//
-//            cnte = srv->waitUntilReady(false, 500);
-//            assert(cnte==1);
-//            cnte = srv->write(c, (int)message.length());
-//            assert(cnte != -1 && cnte != 0);
-//        }
-//    }
-//    return;
-//}
+// Midi communication variables
+atomic_int set_me(1); // incremented when new midi notes come in.
+int memory_trace = 0; // incremented when midi notes are sent.
+atomic_int midi_num(0);
+atomic_int midi_velocity(0);
 
 void* sendToCivilization(void* sv) {
     juce::StreamingSocket* srv = (juce::StreamingSocket*) sv;
     // Server, info, tcp connection...
-    std::string message = "breh\n";
+    std::string message = "num: ";
     std::string message2 = "breh ";
-    char c[message2.length()+5];
+    char c[100];
     volatile int cnte = 0;
     
     // char const *con = message.c_str();
     
     while(true){
         if(memory_trace < set_me) {
-            memory_trace++;
+            memory_trace = set_me;
             
-            message2 = message + to_string(memory_trace);
+            message2 = message + to_string(memory_trace) + "; midi_num: " + to_string(midi_num) + "; velocity: " + to_string(midi_velocity) + ";\n";
 
             for (int i = 0; i < message2.length(); i++) {
                 c[i] = message2[i];
@@ -184,6 +167,7 @@ void FirstVSTAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 //    socket->bindToPort( 8889, "127.0.0.1" );
     
     sock = socket->connect("127.0.0.1", 8889);
+//    sock = socket->connect("192.168.1.222", 8889);
     
     assert(sock);
     
@@ -321,6 +305,8 @@ void FirstVSTAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 //                                                 message.getNoteNumber(),
 //                                                 (juce::uint8) noteOnVel);
             set_me++;
+            midi_num = message.getNoteNumber();
+            midi_velocity = message.getVelocity();
 //            assert(0);
         }
  
