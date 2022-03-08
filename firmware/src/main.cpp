@@ -10,8 +10,8 @@
 
 BLEServer *server;
 
-int PIN_A = 22;
-int PIN_B = 23;
+int CONST_PIN = 25;
+int VARIABLE_PIN = 26;
 
 class ServerCallbacks : public BLEServerCallbacks
 {
@@ -42,20 +42,15 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
             Serial.println();
             Serial.println("*********");
         }
-        if(value == "pos"){
-            Serial.println("Setting pos");
-            digitalWrite(PIN_A, LOW);
-            delay(10);
-            digitalWrite(PIN_B, HIGH);
-        } else if(value == "neg") {
-            Serial.println("Setting neg");
-            digitalWrite(PIN_B, LOW);
-            delay(10);
-            digitalWrite(PIN_A, HIGH);
-        } else if(value == "off"){
-            Serial.println("Setting off");
-            digitalWrite(PIN_A, LOW);
-            digitalWrite(PIN_B, LOW);
+        if(value == "low"){
+            Serial.println("Setting low");
+            dacWrite(VARIABLE_PIN, 54);
+        } else if(value == "med") {
+            Serial.println("Setting med");
+            dacWrite(VARIABLE_PIN, 87);
+        } else if(value == "high"){
+            Serial.println("Setting high");
+            dacWrite(VARIABLE_PIN, 120);
         }
     };
 };
@@ -65,8 +60,9 @@ void setup()
     Serial.begin(9600);
 
     // Stim control signal setup
-    pinMode(PIN_A, OUTPUT);
-    pinMode(PIN_B, OUTPUT);
+    pinMode(CONST_PIN, OUTPUT);
+    pinMode(VARIABLE_PIN, OUTPUT);
+    dacWrite(CONST_PIN, 205);
 
     // Server setup
     BLEDevice::init("Brain Stimulator 0.0.2");
@@ -85,7 +81,7 @@ void setup()
     );
     characteristic->setCallbacks(new CharacteristicCallbacks());
     BLEDescriptor HiLowOffDescriptor(DESCRIPTOR_UUID);
-    HiLowOffDescriptor.setValue("pos | neg | off");
+    HiLowOffDescriptor.setValue("low | med | high");
     characteristic->addDescriptor(&HiLowOffDescriptor);
 
     // Start
