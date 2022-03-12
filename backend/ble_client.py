@@ -43,6 +43,15 @@ class StimClient:
         self.state = 'pos' if self.state == 'neg' else 'neg'
         self.send_command(self.state)
 
+    def start_stim(self):
+        command = "start"
+        self.send_command(command)
+
+    def send_stim_chunk(self, chunk):
+        """
+        Chunk should be a string of hex numbers
+        """
+        self.send_command(chunk)
 
 class DualStimClient:
     def __init__(self):
