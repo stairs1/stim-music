@@ -2,12 +2,12 @@
 Determine DAC output values & ranges based on circuit parameters
 """
 base_emitter_saturation_voltage = 0.7
-i_p = 0.004
+i_p = 0.003
 r_p = 1000
 gain_p = 1 + 1 / 1
 
-i_n_high = 0.006
-i_n_low = 0.002
+i_n_high = 0.005
+i_n_low = 0.001
 r_n = 1000
 gain_n = - 4.7 / 1
 
