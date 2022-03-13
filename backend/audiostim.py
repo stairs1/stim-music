@@ -8,6 +8,7 @@ from sig_proc import SigProc
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import asyncio
 
 class AudioStim:
     def __init__(self, stim_data_callback, stim_start_callback):
@@ -23,7 +24,7 @@ class AudioStim:
         self.stim_data_callback = stim_data_callback #where to send our stim chunks to
         self.stim_start_callback = stim_start_callback #when to start playing stim
         self.stim_chunk_time = 1000 # milliseconds, period of chunk time
-        self.stim_sf = 5 #Hz, brain stim signal sampling frequency
+        self.stim_sf = 100 #Hz, brain stim signal sampling frequency
         self.latency_adjust = 0 #signed int to adjust the latency by self.latency_step_size
         self.latency_step_size = 5 #milliseconds, quantized to the nearest sample
         self.stim_track = None #the values to send to our stimulator, at stim_sf
@@ -171,7 +172,6 @@ class AudioStim:
         self.stream.close()
 
         self.p.terminate()
-
 
 if __name__ == "__main__":
     audiostim = AudioStim()

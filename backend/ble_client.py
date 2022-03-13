@@ -1,14 +1,27 @@
 from simplepyble import Adapter
-from time import sleep
+import time
+import threading
+from queue import Queue, Empty
+import multiprocessing
 
 SERVICE_UUID = "db70e3a8-6cdc-46da-a256-8e1dfedb4bde"
 CHARACTERISTIC_UUID = "49db2ddd-3691-44d3-a0e6-86d2c582ab7e"
 
 class StimClient:
 
-    def __init__(self):
+    def __init__(self, msg_q):
         self.state = 'off'
         self.peripheral = None
+        self.msg_q = msg_q
+
+    def kill(self):
+        pass
+
+    def async_sender(self):
+        while True:
+            #wait for next chunk in queue and send it
+            msg = self.msg_q.get()
+            self.send_command(msg)
 
     def connect(self):
         self.adapter = Adapter.get_adapters()[0]
@@ -20,7 +33,6 @@ class StimClient:
 
         try:
             self.peripheral = next(p for p in peripherals if "Brain Stimulator" in p.identifier())
-            # self.peripheral = next(p for p in peripherals if "Cayden" in p.identifier())
         except StopIteration:
             print("Failed to find Brain Stimulator")
             return
@@ -35,6 +47,9 @@ class StimClient:
 
     def send_command(self, cmd):
         self.peripheral.write_request(SERVICE_UUID, CHARACTERISTIC_UUID, str.encode(cmd))
+
+    def send_command_async(self, cmd):
+        self.packets_to_send_queue.put(cmd)
 
     def off(self):
         self.send_command('off')
@@ -141,12 +156,12 @@ class DualStimClient:
         ]
         for action in actions:
             action()
-            sleep(0.05)
+            time.sleep(0.05)
 
 
 
 if __name__ == "__main__":
     client = StimClient()
     client.connect()
-    sleep(3)
+    time.sleep(3)
     client.disconnect()
