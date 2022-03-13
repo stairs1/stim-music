@@ -46,6 +46,7 @@ class StimClient:
             self.peripheral.disconnect()
 
     def send_command(self, cmd):
+        print("BLE - sending command: {}".format(cmd))
         self.peripheral.write_request(SERVICE_UUID, CHARACTERISTIC_UUID, str.encode(cmd))
 
     def send_command_async(self, cmd):

@@ -1,5 +1,6 @@
 from audiostim import AudioStim
 import time
+import sys
 from ble_client import StimClient
 from multiprocessing import Process, Manager
 
@@ -14,6 +15,8 @@ def connect_callback(chunk):
     for sample in chunk:
         transform_sample = int(sample * 255)
         hex_sample_string = hex(transform_sample)[2:]
+        if len(hex_sample_string) < 2: #we want all hex numbers to have 2 digits
+            hex_sample_string = "0" + hex_sample_string
         chunk_string += hex_sample_string
     #client.send_command_async(chunk_string)
     msg_q.put(chunk_string)
@@ -35,7 +38,7 @@ time.sleep(5)
 
 #setup music audio and generate stim track
 audiostim = AudioStim(stim_data_callback=connect_callback, stim_start_callback=start_callback)
-audiostim.open_audio_file("./Horse.webm")
+audiostim.open_audio_file(sys.argv[1])
 audiostim.generate_stim_track()
 
 #play music and stim

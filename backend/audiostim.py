@@ -24,7 +24,7 @@ class AudioStim:
         self.stim_data_callback = stim_data_callback #where to send our stim chunks to
         self.stim_start_callback = stim_start_callback #when to start playing stim
         self.stim_chunk_time = 1000 # milliseconds, period of chunk time
-        self.stim_sf = 100 #Hz, brain stim signal sampling frequency
+        self.stim_sf = 20 #Hz, brain stim signal sampling frequency
         self.latency_adjust = 0 #signed int to adjust the latency by self.latency_step_size
         self.latency_step_size = 5 #milliseconds, quantized to the nearest sample
         self.stim_track = None #the values to send to our stimulator, at stim_sf
@@ -34,7 +34,7 @@ class AudioStim:
         #signal processing
         self.sig_proc = SigProc()
         self.stft_window = 100 #short time fourier transform window size in milliseconds
-        self.kick_drum_band = (60, 190) #frequency range in Hz
+        self.kick_drum_band = (60, 800) #frequency range in Hz
 
     def handle_keyboard_input(self, key):
         if key == 200: #up arrow
@@ -89,9 +89,37 @@ class AudioStim:
         #get a time series signal representing the power of the input frequency band
         kick_drum_power = self.sig_proc.get_band_power_series(stft_freqs, stft_ps, *self.kick_drum_band)
 
+
         #problem : the period (1 / samplingfrequency) of the power series is equal to the window size, so we resample to fit whatever sampling frequency our stim system is using
         current_sf = 1 / (self.stft_window / 1000)
         kick_drum_power = self.sig_proc.resample_signal(kick_drum_power, current_sf, self.stim_sf)
+
+        #threshold that power
+        kick_drum_low_threshold = 0.30
+        kick_drum_high_threshold = 0.30
+        kick_drum_power[kick_drum_power <= kick_drum_low_threshold] = 0
+        kick_drum_power[kick_drum_power > kick_drum_high_threshold] = 1
+        kick_drum_power[(kick_drum_power < kick_drum_high_threshold) & (kick_drum_power > kick_drum_low_threshold)] = 0.5
+
+        #flip from 1 to -1
+        flip = True
+        series = -1
+        series_count = 3
+        for i, val in enumerate(kick_drum_power):
+            if val == 0 and ((series == 0) or (series > series_count)):
+                if series > series_count: #if we were just in a series of 1's and now a zero, change flip and end the series
+                    flip = not flip
+                    series = -1
+            else: #val is 1, or we are running in a series
+                if flip:
+                    kick_drum_power[i] = -1.0
+                series += 1
+
+        #now that we've thresholded the values and made them negative and positive, we reset by normalizing
+        kick_drum_power = self.sig_proc.normalize(kick_drum_power)
+
+        print("POST FLIP")
+        print(list(kick_drum_power))
 
         #set the stim track from the previous calculations
         self.stim_track = kick_drum_power

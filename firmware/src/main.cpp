@@ -16,13 +16,13 @@ using namespace std;
 
 #define CONST_PIN 25
 #define VARIABLE_PIN 26
-#define STIM_RATE 5 // Hz
+#define STIM_RATE 20 // Hz
 
 const float STIM_PERIOD = 1000 / STIM_RATE; // milliseconds
 const int dac_buffer_len = STIM_RATE * 3;   // 3-second buffer
-const float v_dac_8_bit_const = 172;
-const float v_dac_8_bit_high = 106;
-const float v_dac_8_bit_low = 40;
+const float v_dac_8_bit_const = 163;
+const float v_dac_8_bit_high = 41;
+const float v_dac_8_bit_low = 106;
 int dac_bufffer[dac_buffer_len];
 int read_ptr = 0;
 int write_ptr = 0;
@@ -49,16 +49,16 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
     void onWrite(BLECharacteristic *characteristic)
     {
         std::string value = characteristic->getValue();
-        if (value.length() > 0)
-        {
-            Serial.println("*********");
-            Serial.print("New value: ");
-            for (int i = 0; i < value.length(); i++)
-                Serial.print(value[i]);
+        // if (value.length() > 0)
+        // {
+        //     Serial.println("*********");
+        //     //Serial.print("New value: ");
+        //     // for (int i = 0; i < value.length(); i++)
+        //         //Serial.print(value[i]);
 
-            Serial.println();
-            Serial.println("*********");
-        }
+        //     //Serial.println();
+        //     //Serial.println("*********");
+        // }
 
         if (value == "start")
         {
@@ -87,8 +87,8 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
 
                 int dacVal = stimVal / 255.0 * (v_dac_8_bit_high - v_dac_8_bit_low) + v_dac_8_bit_low;
 
-                Serial.printf("%f\n", stimVal);
-                Serial.printf("%d\n", dacVal);
+                //Serial.printf("%f\n", stimVal);
+                //Serial.printf("%d\n", dacVal);
 
                 dac_bufffer[write_ptr] = dacVal;
                 write_ptr = (write_ptr + 1) % dac_buffer_len;
@@ -143,12 +143,14 @@ void loop()
     // protect against unexpected outputs
     if (stimulate && (read_ptr != write_ptr))
     {
+        Serial.printf("DAC value: %d", dac_bufffer[read_ptr]);
+        Serial.println();
         dacWrite(VARIABLE_PIN, dac_bufffer[read_ptr]);
         read_ptr = (read_ptr + 1) % dac_buffer_len;
     }
 
     unsigned long ctime = millis();
-    Serial.println(ctime - ptime);
+    // Serial.println(ctime - ptime);
     ptime = ctime;
 
     ticker++;
