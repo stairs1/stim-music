@@ -4,13 +4,13 @@ Determine DAC output values & ranges based on circuit parameters
 import sys
 
 base_emitter_saturation_voltage = 0.7
-i_p = 0.003
-r_p = 1000
+i_p = 0.004
+r_p = 220 #1000
 gain_p = 1 + 1 / 1
 
-i_n_high = 0.005
+i_n_high = 0.007
 i_n_low = 0.001
-r_n = 1000
+r_n = 220 #1000
 gain_n = - 4.7 / 1
 
 def p_dac_8bit_for_battery(v_battery):
@@ -44,4 +44,4 @@ if __name__ == "__main__":
     p_dac = p_dac_8bit_for_battery(p_voltage)
     n_dac = n_dac_8bit_for_battery(n_voltage)
     print("+ Positive DAC setting: {}".format(p_dac))
-    print("- Negative DAC setting: {}".format(n_dac))
+    print("- Negative DAC setting: (low, high) {}".format(n_dac))

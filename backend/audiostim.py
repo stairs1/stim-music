@@ -34,7 +34,7 @@ class AudioStim:
         #signal processing
         self.sig_proc = SigProc()
         self.stft_window = 100 #short time fourier transform window size in milliseconds
-        self.kick_drum_band = (60, 800) #frequency range in Hz
+        self.kick_drum_band = (40, 800) #frequency range in Hz
 
     def handle_keyboard_input(self, key):
         if key == 200: #up arrow
@@ -43,14 +43,58 @@ class AudioStim:
             self.latency_adjust -= 1
         print(self.latency_adjust)
 
+    def download_youtube_video(self, url):
+        print("Downloading youtube video...")
+        command = "youtube-dlc -f 251 {}".format(url)
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        process.wait()
+        if process.returncode != 0: #0 is success
+            print("youtube-dlc failed to get this video. Is youtube-vlc installed (see README)")
+            sys.exit()
+        out = out.decode("utf-8").split("\n")
+
+        video_name = None
+        for line in out:
+            dl_str = "Destination: "
+            already_have_str = " has already been downloaded"
+            ah_start_string = "[download] "
+            file_end = ".webm"
+            dl_loc = line.find(dl_str)
+            ah_loc = line.find(already_have_str)
+            if dl_loc != -1:
+                video_name = line[dl_loc+len(dl_str):]
+                video_name = video_name[:video_name.find(file_end)+len(file_end)]
+                fixed_video_name = video_name.replace("(", "_").replace(")", "_").replace(" ", "_").replace("-", "_")
+                mv_cmd = "mv \"{}\" {}".format(video_name, fixed_video_name)
+                print(mv_cmd)
+                video_name = fixed_video_name
+                process = subprocess.Popen(mv_cmd, shell=True, stdout=subprocess.PIPE)
+                process.wait()
+                print("process return code:")
+                print(process.returncode)
+                if process.returncode != 0: #0 is success
+                    print("mv command failed. Exiting.")
+                    sys.exit()
+            elif ah_loc != -1:
+                video_name = line[len(ah_start_string):]
+                video_name = video_name[:video_name.find(file_end)+len(file_end)]
+        return video_name
+
     def open_audio_file(self, filename):
+        if "http" in filename: #if http, it's a link, and we parse it
+            if "youtube" in filename:
+                filename = self.download_youtube_video(filename)
+                if filename is None:
+                    print("Failed to get Youtube video. Exiting.")
+                    sys.exit()
+
         filename_no_ext, file_extension = os.path.splitext(filename)
 
         #if the passed in file isn't a wav, convert it to one
         if file_extension != "wav":
             if not os.path.exists(filename_no_ext + ".wav"):
-                command = "./audiofile_to_wav.sh {}".format(filename)
-                command = "ffmpeg -i {} {}.wav".format(filename, filename_no_ext)
+                command = "ffmpeg -i '{}' {}.wav".format(filename, filename_no_ext.strip(" ").strip("-"))
                 process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
                 process.wait()
                 if process.returncode != 0: #0 is success
@@ -89,24 +133,25 @@ class AudioStim:
         #get a time series signal representing the power of the input frequency band
         kick_drum_power = self.sig_proc.get_band_power_series(stft_freqs, stft_ps, *self.kick_drum_band)
 
-
         #problem : the period (1 / samplingfrequency) of the power series is equal to the window size, so we resample to fit whatever sampling frequency our stim system is using
         current_sf = 1 / (self.stft_window / 1000)
         kick_drum_power = self.sig_proc.resample_signal(kick_drum_power, current_sf, self.stim_sf)
 
         #threshold that power
-        kick_drum_low_threshold = 0.30
-        kick_drum_high_threshold = 0.30
+        kick_drum_low_threshold = 0.24
+        kick_drum_high_threshold = 0.24
+        print("PRE_THRESH:")
+        print(list(kick_drum_power))
         kick_drum_power[kick_drum_power <= kick_drum_low_threshold] = 0
         kick_drum_power[kick_drum_power > kick_drum_high_threshold] = 1
-        kick_drum_power[(kick_drum_power < kick_drum_high_threshold) & (kick_drum_power > kick_drum_low_threshold)] = 0.5
+        #kick_drum_power[(kick_drum_power < kick_drum_high_threshold) & (kick_drum_power > kick_drum_low_threshold)] = 0.5
 
         #flip from 1 to -1
         flip = True
         series = -1
         series_count = 3
         for i, val in enumerate(kick_drum_power):
-            if val == 0 and ((series == 0) or (series > series_count)):
+            if val == 0 and ((series == -1) or (series > series_count)):
                 if series > series_count: #if we were just in a series of 1's and now a zero, change flip and end the series
                     flip = not flip
                     series = -1

@@ -15,6 +15,17 @@ Ubuntu 20 or Mac
 
 Run ESP32s with GVS firmware and hardware setup, GVS to VST Python backend at VST_to_GVS_server_bridge_python, open VST in new track in DAW. Run the steps below to setup each component.
 
+
+### Backend
+1. Setup and activate virtual environment
+2. Setup Youtube-dlc globally:
+```
+sudo wget https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc -O /usr/local/bin/youtube-dlc
+sudo chmod a+rx /usr/local/bin/youtube-dlc
+```
+3. Install requirements:
+`pip3 install -r requirements.txt`
+
 ### Firmware
 
 1. Install Visual Studio Code. `sudo snap install code --classic`

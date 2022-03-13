@@ -1,1 +1,5 @@
 simplepyble==0.0.4
+numpy
+scipy
+matplotlib
+pyaudio
