@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "TACS")(type "KiCad")(uri "/home/cayden/biggem/Tester/MUSICPLUSPLUS/hardware/TACS.kicad_sym")(options "")(descr ""))
+  (lib (name "LT3467AES6TRPBF")(type "KiCad")(uri "/home/cayden/biggem/Tester/MUSICPLUSPLUS/hardware/LT3467AES6TRPBF.kicad_sym")(options "")(descr ""))
+)
