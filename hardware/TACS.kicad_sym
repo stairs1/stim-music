@@ -41,11 +41,11 @@
     (symbol "Electrodes_1_1"
       (pin bidirectional line (at -15.24 0 0) (length 2.54)
         (name "L_Stim" (effects (font (size 1.27 1.27))))
-        (number "" (effects (font (size 1.27 1.27))))
+        (number "1" (effects (font (size 1.27 1.27))))
       )
       (pin input line (at 15.24 0 180) (length 2.54)
         (name "R_stim" (effects (font (size 1.27 1.27))))
-        (number "" (effects (font (size 1.27 1.27))))
+        (number "2" (effects (font (size 1.27 1.27))))
       )
     )
   )
