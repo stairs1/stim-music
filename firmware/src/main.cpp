@@ -14,15 +14,15 @@ using namespace std;
 #define CHARACTERISTIC_UUID "49db2ddd-3691-44d3-a0e6-86d2c582ab7e"
 #define DESCRIPTOR_UUID "6bdec572-c935-4b09-80de-de3c475d0763"
 
-#define CONST_PIN 25
-#define VARIABLE_PIN 26
+#define CONST_PIN 26
+#define VARIABLE_PIN 25
 #define STIM_RATE 20 // Hz
 
 const float STIM_PERIOD = 1000 / STIM_RATE; // milliseconds
 const int dac_buffer_len = STIM_RATE * 3;   // 3-second buffer
-const float v_dac_8_bit_const = 163;
-const float v_dac_8_bit_high = 41;
-const float v_dac_8_bit_low = 106;
+const float v_dac_8_bit_const = 255;
+const float v_dac_8_bit_high = 141;
+const float v_dac_8_bit_low = 186;
 int dac_bufffer[dac_buffer_len];
 int read_ptr = 0;
 int write_ptr = 0;
