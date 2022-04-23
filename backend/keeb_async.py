@@ -13,6 +13,9 @@ class KeyboardThread(threading.Thread):
     def kill(self):
         self.kill_self = True
 
+    def set_keeb_callback(self, keeb_callback):
+        self.input_cbk = keeb_callback
+
     def run(self):
         while not self.kill_self:
             raw_getch = self.getch()

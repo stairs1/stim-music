@@ -27,7 +27,9 @@ def start_callback():
     msg_q.put("start")
 
 #open connection to GVS StimMusic++ ESP32 hardware
+client = None
 def connect_client(msg_q):
+    global client
     client = StimClient(msg_q)
     client.connect()
     client.async_sender()
@@ -36,13 +38,19 @@ client_bt_process = Process(target=connect_client, args=(msg_q,))
 client_bt_process.start()
 time.sleep(5)
 
-#setup music audio and generate stim track
+#setup audio stim
 audiostim = AudioStim(stim_data_callback=connect_callback, stim_start_callback=start_callback)
+
+#configure delay for music/audio
+audiostim.audio_delay_config()
+
+#setup music audio and generate stim track
 audiostim.open_audio_file(sys.argv[1])
 audiostim.generate_stim_track()
 
 #play music and stim
 audiostim.play_music_plus_plus()
+audiostim.kill()
 
 #disconnect client when done
-#client.disconnect()
+client.kill()

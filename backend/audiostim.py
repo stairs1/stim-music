@@ -31,17 +31,21 @@ class AudioStim:
         self.stim_offset = None #our current offset in our stim array
         self.num_samples_per_stim_packet = None #how many samples to send per chunk for stim
 
+        #delay config
+        self.space_receive_times = list()
+        self.audio_bt_delay = 0
+        self.stim_bt_delay = 0
+
         #signal processing
         self.sig_proc = SigProc()
         self.stft_window = 100 #short time fourier transform window size in milliseconds
         self.kick_drum_band = (40, 800) #frequency range in Hz
 
-    def handle_keyboard_input(self, key):
-        if key == 200: #up arrow
-            self.latency_adjust += 1
-        elif key == 201: #down arrow
-            self.latency_adjust -= 1
-        print(self.latency_adjust)
+        #setup keyboard thread
+        self.keeb_thread = KeyboardThread(self.audio_config_handle_keyboard_input) #a thread which listen for keyboard commands and throws an event on this thread when one is seen
+
+    def kill(self):
+        self.keeb_thread.kill()
 
     def download_youtube_video(self, url):
         print("Downloading youtube video...")
@@ -140,8 +144,6 @@ class AudioStim:
         #threshold that power
         kick_drum_low_threshold = 0.24
         kick_drum_high_threshold = 0.24
-        print("PRE_THRESH:")
-        print(list(kick_drum_power))
         kick_drum_power[kick_drum_power <= kick_drum_low_threshold] = 0
         kick_drum_power[kick_drum_power > kick_drum_high_threshold] = 1
         #kick_drum_power[(kick_drum_power < kick_drum_high_threshold) & (kick_drum_power > kick_drum_low_threshold)] = 0.5
@@ -162,9 +164,6 @@ class AudioStim:
 
         #now that we've thresholded the values and made them negative and positive, we reset by normalizing
         kick_drum_power = self.sig_proc.normalize(kick_drum_power)
-
-        print("POST FLIP")
-        print(list(kick_drum_power))
 
         #set the stim track from the previous calculations
         self.stim_track = kick_drum_power
@@ -207,12 +206,68 @@ class AudioStim:
         self.stim_data_callback(self.stim_track[self.stim_offset:self.stim_offset+self.num_samples_per_stim_packet])
         self.stim_offset = self.stim_offset + self.num_samples_per_stim_packet
 
+    def audio_delay_config(self):
+        """
+        Figure out the total delay between PyAudio playing audio on laptop and user hearing that audio on their bluetooth headphones/speaker.
+        """
+        #first, load the diract delta measure/impulse sound we are playing to the user
+        self.open_audio_file("./Closed-Hi-Hat-2.wav")
+
+        #take over the keyboard control to listen for space bar
+        self.set_keeb_callback(self.audio_config_handle_keyboard_input)
+
+        #then, play that impulse every n seconds
+        impulse_freq = 1.5 #Hz
+        impulse_period = 1 / impulse_freq
+        audio_play_times = list()
+        self.space_receive_times = list()
+        print("\n\nPress the space bar in time with the beat 10 times, like you're playing a drum on the space bar...")
+        time.sleep(3)
+        for i in range(10):
+            #play the impulse, record the time we play it
+            curr_time = time.time()
+            audio_play_times.append(curr_time)
+
+            #get the audio and send it out to be played
+            self.wf.rewind() #go back to beginning of sound
+            self.audio_data = self.wf.readframes(self.CHUNK)
+            self.stream.write(self.audio_data)
+
+            #delay our period before we play the next impulse
+            time.sleep(impulse_period)
+
+        #compute the average delay
+        drop_n = 3 #get rid of first n as that's when the user was adjusting to the speed of the rhythm
+        avg_delay = np.mean(np.abs(np.array(audio_play_times[drop_n:]) - np.array(self.space_receive_times[drop_n:]))) 
+        self.audio_bt_delay = avg_delay
+
+        self.close_audio()
+
+    def set_keeb_callback(self, callback):
+        self.keeb_thread.set_keeb_callback(callback)
+
+    def play_handle_keyboard_input(self, key):
+        if key == 200: #up arrow
+            self.latency_adjust += 1
+        elif key == 201: #down arrow
+            self.latency_adjust -= 1
+        print(self.latency_adjust)
+
+    def audio_config_handle_keyboard_input(self, key):
+        self.space_receive_times.append(time.time())
+
+    def close_audio(self):
+        self.stream.stop_stream()
+        self.stream.close()
+        self.p.terminate()
+
     def play_music_plus_plus(self):
         if self.audio_data == None:
             print("Called `play_music_plus_plus()` without any data loaded. Please load a song first.")
             return
 
-        self.kthread = KeyboardThread(self.handle_keyboard_input) #a thread which listen for keyboard commands and throws an event on this thread when one is seen
+        #set the keyboard callback to handle latency adjustments during playback
+        self.set_keeb_callback(self.play_handle_keyboard_input)
 
         #send first n stim packets
         n = 2
@@ -239,12 +294,7 @@ class AudioStim:
             self.audio_data = self.wf.readframes(self.CHUNK)
             frames += 1
 
-        self.kthread.kill()
-
-        self.stream.stop_stream()
-        self.stream.close()
-
-        self.p.terminate()
+        self.close_audio()
 
 if __name__ == "__main__":
     audiostim = AudioStim()

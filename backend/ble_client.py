@@ -13,12 +13,14 @@ class StimClient:
         self.state = 'off'
         self.peripheral = None
         self.msg_q = msg_q
+        self.kill = False
 
     def kill(self):
-        pass
+        self.kill = True
+        self.disconnect()
 
     def async_sender(self):
-        while True:
+        while True and not self.kill:
             #wait for next chunk in queue and send it
             msg = self.msg_q.get()
             self.send_command(msg)
