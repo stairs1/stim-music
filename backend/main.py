@@ -47,8 +47,8 @@ time.sleep(5)
 audiostim = AudioStim(send_stim_data=send_stim_data, set_stim_mode=set_stim_mode)
 
 #configure delay for music/audio and stim
-# audiostim.audio_delay_config()
-# audiostim.stim_delay_config()
+#audiostim.audio_delay_config()
+#audiostim.stim_delay_config()
 
 #setup music audio and generate stim track
 audiostim.open_audio_file(sys.argv[1])

@@ -28,13 +28,13 @@ class AudioStim:
         self.latency_adjust = 0 #signed int to adjust the latency by self.latency_step_size
         self.latency_step_size = 5 #milliseconds, quantized to the nearest sample
         self.stim_track = None #the values to send to our stimulator, at stim_sf
-        self.stim_offset = None #our current offset in our stim array
-        self.num_samples_per_stim_packet = None #how many samples to send per chunk for stim
+        self.stim_offset = 0 #our current offset in our stim array
+        self.num_samples_per_stim_packet = int((self.stim_chunk_time / 1000) * self.stim_sf) #how many samples to send per chunk for stim
 
         #delay config
         self.space_receive_times = list()
-        self.audio_bt_delay = 0
-        self.stim_bt_delay = 0
+        self.audio_bt_delay = 0.115
+        self.stim_bt_delay = 0.105
 
         #signal processing
         self.sig_proc = SigProc()
@@ -164,6 +164,8 @@ class AudioStim:
 
         #now that we've thresholded the values and made them negative and positive, we reset by normalizing
         kick_drum_power = self.sig_proc.normalize(kick_drum_power)
+        kick_drum_power[kick_drum_power > 0.8] = 0.8
+        kick_drum_power[kick_drum_power < 0.2] = 0.2
 
         #set the stim track from the previous calculations
         self.stim_track = kick_drum_power
@@ -191,17 +193,19 @@ class AudioStim:
         audio_stereo[:,1] = audio_normalised[range(1,len(audio_normalised),2)]
         return audio_stereo[:,0], audio_stereo[:,1]
 
-    def send_next_stim_chunk(self):
-        #if we haven't set up yet, send the first stim packet
-        if self.stim_offset is None:
+    def add_stim_offset(self, phase_shift_seconds):
+        """
+        Add a positive or negative phase shift to the stim track signal
+        """
+        #self.stim_offset += max(0, int(self.stim_sf * phase_shift_seconds)) #does not allow for negative phase shift at start of song
+        self.stim_offset += int(self.stim_sf * phase_shift_seconds)
+
+        #if stim_offset is negative, then we must insert new values at the beginning of the stim track to create a phase delay
+        if self.stim_offset < 0:
+            self.stim_track = self.stim_track.insert(np.zeros(-self.stim_offset)) #insert zeros to cause a phase offset at the beginning of the song
             self.stim_offset = 0
-            self.num_samples_per_stim_packet = int((self.stim_chunk_time / 1000) * self.stim_sf)
 
-        #adjust our offset by the current latency offset that user has live set
-        phase_shift_seconds = (self.latency_adjust * self.latency_step_size) / 1000
-        self.latency_adjust = 0
-        self.stim_offset += max(0, int(self.stim_sf * phase_shift_seconds))
-
+    def send_next_stim_chunk(self):
         #send stim packet
         self.send_stim_data(self.stim_track[self.stim_offset:self.stim_offset+self.num_samples_per_stim_packet])
         self.stim_offset = self.stim_offset + self.num_samples_per_stim_packet
@@ -221,9 +225,9 @@ class AudioStim:
         impulse_period = 1 / impulse_freq
         audio_play_times = list()
         self.space_receive_times = list()
-        print("\n\nPress the space bar in time with the beat 10 times, like you're playing a drum on the space bar...")
+        print("\n\nPress the space bar in time with the beat 15 times, like you're playing a drum on the space bar...")
         time.sleep(3)
-        for i in range(10):
+        for i in range(15):
             #play the impulse, record the time we play it
             curr_time = time.time()
             audio_play_times.append(curr_time)
@@ -241,7 +245,7 @@ class AudioStim:
         avg_delay = np.mean(np.abs(np.array(audio_play_times[drop_n:]) - np.array(self.space_receive_times[drop_n:]))) 
         self.audio_bt_delay = avg_delay
 
-        print(self.audio_bt_delay)
+        print("AUDIO DELAY IS: {}".format(self.audio_bt_delay))
 
         self.close_audio()
 
@@ -270,7 +274,7 @@ class AudioStim:
         avg_delay = np.mean(np.abs(np.array(light_flash_times[drop_n:]) - np.array(self.space_receive_times[drop_n:]))) 
         self.stim_bt_delay = avg_delay
 
-        print(self.stim_bt_delay)
+        print("STIM DELAY CONFIG IS: {}".format(self.stim_bt_delay))
 
         self.set_stim_mode("inactive")
 
@@ -300,19 +304,23 @@ class AudioStim:
             print("Called `play_music_plus_plus()` without any data loaded. Please load a song first.")
             return
 
+        #set the starting phase adjustment
+        self.add_stim_offset(self.audio_bt_delay - self.stim_bt_delay)
+
         #set the keyboard callback to handle latency adjustments during playback
         self.set_keeb_callback(self.play_handle_keyboard_input)
 
-        #send first n stim packets
+        #send first n stim packets so the ESP32 has some packets in its buffer
         n = 2
         for i in range(n): self.send_next_stim_chunk()
-        time.sleep(0.1)
+        time.sleep(0.3)
 
         #count our frames to tell the current time in the audio data
         frames = 0
 
         #start the stim now
-        self.set_stim_mode("stimulate")
+        #self.set_stim_mode("stimulate")
+        self.set_stim_mode("config")
 
         #chunk through the song, sending off stim packets as we go
         last_stim_send = 0
@@ -320,6 +328,10 @@ class AudioStim:
             #send the next stim chunk if enough time has elapsed
             audio_time_elapsed = (frames * self.CHUNK) / self.audio_sf
             if (audio_time_elapsed - last_stim_send) > (self.stim_chunk_time / 1000):
+                #adjust our offset by the current latency offset that user has live set
+                #phase_shift_seconds = (self.latency_adjust * self.latency_step_size) / 1000
+                #self.latency_adjust = 0
+                #self.add_stim_offset(phase_shift_seconds)
                 self.send_next_stim_chunk()
                 last_stim_send = audio_time_elapsed
 
