@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import asyncio
+from feelz import Feelz
 
 class AudioStim:
     def __init__(self, stim_data_callback, stim_start_callback):
@@ -36,10 +37,8 @@ class AudioStim:
         self.audio_bt_delay = 0
         self.stim_bt_delay = 0
 
-        #signal processing
-        self.sig_proc = SigProc()
-        self.stft_window = 100 #short time fourier transform window size in milliseconds
-        self.kick_drum_band = (40, 800) #frequency range in Hz
+        #the injectable functions which define the style of stim generation
+        self.feelz = Feelz(self.stim_sf)
 
         #setup keyboard thread
         self.keeb_thread = KeyboardThread(self.audio_config_handle_keyboard_input) #a thread which listen for keyboard commands and throws an event on this thread when one is seen
@@ -122,52 +121,11 @@ class AudioStim:
     def generate_stim_track(self):
         #get audio data in numpy format
         audio_left, audio_right = self.get_numpy_audio()
-
-        #do sliding window Short Time Fourier Transform
-        window_size = int((self.stft_window / 1000) * self.audio_sf) #divide by 1000, because we are using milliseconds
-        step_size = window_size
         audio = audio_left + audio_right
-        self.sig_proc.sf = self.wf.getframerate()
-        stft_freqs, stft_ps = self.sig_proc.sliding_window_psd(audio, window_size, step_size=step_size)
 
-        #plot one of the fourier transforms
-        #plt.plot(stft_freqs[30], stft_ps[30])
-        #plt.show()
-
-        #get a time series signal representing the power of the input frequency band
-        kick_drum_power = self.sig_proc.get_band_power_series(stft_freqs, stft_ps, *self.kick_drum_band)
-
-        #problem : the period (1 / samplingfrequency) of the power series is equal to the window size, so we resample to fit whatever sampling frequency our stim system is using
-        current_sf = 1 / (self.stft_window / 1000)
-        kick_drum_power = self.sig_proc.resample_signal(kick_drum_power, current_sf, self.stim_sf)
-
-        #threshold that power
-        kick_drum_low_threshold = 0.24
-        kick_drum_high_threshold = 0.24
-        kick_drum_power[kick_drum_power <= kick_drum_low_threshold] = 0
-        kick_drum_power[kick_drum_power > kick_drum_high_threshold] = 1
-        #kick_drum_power[(kick_drum_power < kick_drum_high_threshold) & (kick_drum_power > kick_drum_low_threshold)] = 0.5
-
-        #flip from 1 to -1
-        flip = True
-        series = -1
-        series_count = 3
-        for i, val in enumerate(kick_drum_power):
-            if val == 0 and ((series == -1) or (series > series_count)):
-                if series > series_count: #if we were just in a series of 1's and now a zero, change flip and end the series
-                    flip = not flip
-                    series = -1
-            else: #val is 1, or we are running in a series
-                if flip:
-                    kick_drum_power[i] = -1.0
-                series += 1
-
-        #now that we've thresholded the values and made them negative and positive, we reset by normalizing
-        kick_drum_power = self.sig_proc.normalize(kick_drum_power)
-
-        #set the stim track from the previous calculations
-        self.stim_track = kick_drum_power
-
+        #self.stim_track = feelz.wavey_envelope(audio)
+        self.stim_track = self.feelz.bass_hit_square_wave(audio, self.audio_sf)
+        
     def get_numpy_audio(self):
         """
         Convert audio wav file to numpy array.
