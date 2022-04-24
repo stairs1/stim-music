@@ -14,9 +14,10 @@ using namespace std;
 #define CHARACTERISTIC_UUID "49db2ddd-3691-44d3-a0e6-86d2c582ab7e"
 #define DESCRIPTOR_UUID "6bdec572-c935-4b09-80de-de3c475d0763"
 
-#define CONST_PIN 26
-#define VARIABLE_PIN 25
-#define STIM_RATE 20 // Hz
+#define CONST_PIN 26    // D3 on beetle
+#define VARIABLE_PIN 25 // D2 on beetle
+#define LED_PIN 13      // D7 on beetle
+#define STIM_RATE 20    // Hz
 
 const float STIM_PERIOD = 1000 / STIM_RATE; // milliseconds
 const int dac_buffer_len = STIM_RATE * 3;   // 3-second buffer
@@ -27,6 +28,7 @@ int dac_bufffer[dac_buffer_len];
 int read_ptr = 0;
 int write_ptr = 0;
 bool stimulate = false;
+bool configure = false;
 
 BLEServer *server;
 
@@ -60,18 +62,29 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
         //     //Serial.println("*********");
         // }
 
-        if (value == "start")
+        if (value == "stimulate")
         {
-            Serial.println("Start Stimulation");
+            Serial.println("stimulation mode");
             read_ptr = 0;
             write_ptr = 0;
+            configure = false;
             stimulate = true;
         }
-        else if (value == "stop")
+        else if (value == "inactive")
         {
-            Serial.println("Stop Stimulation");
+            Serial.println("inactive mode");
             stimulate = false;
+            configure = false;
+            digitalWrite(LED_PIN, LOW);
             dacWrite(VARIABLE_PIN, 0.5 * (v_dac_8_bit_high - v_dac_8_bit_low) + v_dac_8_bit_low);
+        }
+        else if (value == "config")
+        {
+            Serial.println("config mode");
+            read_ptr = 0;
+            write_ptr = 0;
+            stimulate = false;
+            configure = true;
         }
         else
         {
@@ -85,10 +98,10 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
                 toConv[2] = '\n';
                 float stimVal = (float)strtol(toConv, 0, 16);
 
-                int dacVal = stimVal / 255.0 * (v_dac_8_bit_high - v_dac_8_bit_low) + v_dac_8_bit_low;
+                int dacVal = configure ? stimVal : stimVal / 255.0 * (v_dac_8_bit_high - v_dac_8_bit_low) + v_dac_8_bit_low;
 
-                //Serial.printf("%f\n", stimVal);
-                //Serial.printf("%d\n", dacVal);
+                // Serial.printf("%f\n", stimVal);
+                // Serial.printf("%d\n", dacVal);
 
                 dac_bufffer[write_ptr] = dacVal;
                 write_ptr = (write_ptr + 1) % dac_buffer_len;
@@ -104,10 +117,11 @@ void setup()
     // Stim control signal setup
     pinMode(CONST_PIN, OUTPUT);
     pinMode(VARIABLE_PIN, OUTPUT);
+    pinMode(LED_PIN, OUTPUT);
     dacWrite(CONST_PIN, v_dac_8_bit_const);
 
     // Server setup
-    BLEDevice::init("Brain Stimulator 0.0.2");
+    BLEDevice::init("Brain Stimulator 0.0.3");
     server = BLEDevice::createServer();
     server->setCallbacks(new ServerCallbacks());
     server->getAdvertising()->addServiceUUID(SERVICE_UUID);
@@ -146,6 +160,13 @@ void loop()
         Serial.printf("DAC value: %d", dac_bufffer[read_ptr]);
         Serial.println();
         dacWrite(VARIABLE_PIN, dac_bufffer[read_ptr]);
+        read_ptr = (read_ptr + 1) % dac_buffer_len;
+    }
+    else if (configure && (read_ptr != write_ptr))
+    {
+        int led_value = dac_bufffer[read_ptr] > 128 ? HIGH : LOW;
+        Serial.printf("Configure value : %d\n", led_value);
+        digitalWrite(LED_PIN, led_value);
         read_ptr = (read_ptr + 1) % dac_buffer_len;
     }
 

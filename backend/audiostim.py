@@ -11,7 +11,7 @@ import time
 import asyncio
 
 class AudioStim:
-    def __init__(self, stim_data_callback, stim_start_callback):
+    def __init__(self, send_stim_data, set_stim_mode):
         #audio
         self.CHUNK = 1024
         self.wf = None #wave file in memory
@@ -21,8 +21,8 @@ class AudioStim:
         self.audio_sf = None #Hz, audio signal sampling frequency
 
         #stim
-        self.stim_data_callback = stim_data_callback #where to send our stim chunks to
-        self.stim_start_callback = stim_start_callback #when to start playing stim
+        self.send_stim_data = send_stim_data #where to send our stim chunks to
+        self.set_stim_mode = set_stim_mode #when to start / stop playing stim, configuration mode
         self.stim_chunk_time = 1000 # milliseconds, period of chunk time
         self.stim_sf = 20 #Hz, brain stim signal sampling frequency
         self.latency_adjust = 0 #signed int to adjust the latency by self.latency_step_size
@@ -203,7 +203,7 @@ class AudioStim:
         self.stim_offset += max(0, int(self.stim_sf * phase_shift_seconds))
 
         #send stim packet
-        self.stim_data_callback(self.stim_track[self.stim_offset:self.stim_offset+self.num_samples_per_stim_packet])
+        self.send_stim_data(self.stim_track[self.stim_offset:self.stim_offset+self.num_samples_per_stim_packet])
         self.stim_offset = self.stim_offset + self.num_samples_per_stim_packet
 
     def audio_delay_config(self):
@@ -241,7 +241,38 @@ class AudioStim:
         avg_delay = np.mean(np.abs(np.array(audio_play_times[drop_n:]) - np.array(self.space_receive_times[drop_n:]))) 
         self.audio_bt_delay = avg_delay
 
+        print(self.audio_bt_delay)
+
         self.close_audio()
+
+    def stim_delay_config(self):
+        """
+        Calculate delay between stim track on laptop and current output on stim device.
+        """
+        self.space_receive_times = []
+        light_flash_times = []
+        self.set_stim_mode("config")
+
+        #take over the keyboard control to listen for space bar
+        self.set_keeb_callback(self.stim_config_handle_keyboard_input)
+
+        print("\n\n Press the space bar in time with the flashing light on your device 15 times")
+
+        # flashes at a known frequency
+        for _ in range(15):
+            light_flash_times.append(time.time())
+            to_send = np.zeros(20)
+            to_send[:2] = 1
+            self.send_stim_data(to_send)
+            time.sleep(1)
+
+        drop_n = 3 #get rid of first n as that's when the user was adjusting to the speed of the rhythm
+        avg_delay = np.mean(np.abs(np.array(light_flash_times[drop_n:]) - np.array(self.space_receive_times[drop_n:]))) 
+        self.stim_bt_delay = avg_delay
+
+        print(self.stim_bt_delay)
+
+        self.set_stim_mode("inactive")
 
     def set_keeb_callback(self, callback):
         self.keeb_thread.set_keeb_callback(callback)
@@ -252,6 +283,9 @@ class AudioStim:
         elif key == 201: #down arrow
             self.latency_adjust -= 1
         print(self.latency_adjust)
+
+    def stim_config_handle_keyboard_input(self, key):
+        self.space_receive_times.append(time.time())
 
     def audio_config_handle_keyboard_input(self, key):
         self.space_receive_times.append(time.time())
@@ -278,7 +312,7 @@ class AudioStim:
         frames = 0
 
         #start the stim now
-        self.stim_start_callback()
+        self.set_stim_mode("stimulate")
 
         #chunk through the song, sending off stim packets as we go
         last_stim_send = 0

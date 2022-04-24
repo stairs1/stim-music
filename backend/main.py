@@ -9,7 +9,7 @@ msg_q = m.Queue()
 
 #these functions connects the AudioStim output to whatever frontend hardware you want
 #used to decouple generation of stim and sending of the data
-def connect_callback(chunk):
+def send_stim_data(chunk):
     chunk_string = ""
     #incoming is floats form 0 to 1, convert this to integer 0-255, then to hex string
     for sample in chunk:
@@ -21,10 +21,15 @@ def connect_callback(chunk):
     #client.send_command_async(chunk_string)
     msg_q.put(chunk_string)
 
-def start_callback():
-    print("Starting now")
-    #client.start_stim()
-    msg_q.put("start")
+def set_stim_mode(mode):
+    """
+    Send mode-change commands to stim device:
+
+    stimulate - set stim device mode to stimulation
+    inactive  - set stim device mode to off
+    config    - set stim device mode to configuration
+    """
+    msg_q.put(mode)
 
 #open connection to GVS StimMusic++ ESP32 hardware
 client = None
@@ -39,10 +44,11 @@ client_bt_process.start()
 time.sleep(5)
 
 #setup audio stim
-audiostim = AudioStim(stim_data_callback=connect_callback, stim_start_callback=start_callback)
+audiostim = AudioStim(send_stim_data=send_stim_data, set_stim_mode=set_stim_mode)
 
-#configure delay for music/audio
-audiostim.audio_delay_config()
+#configure delay for music/audio and stim
+# audiostim.audio_delay_config()
+# audiostim.stim_delay_config()
 
 #setup music audio and generate stim track
 audiostim.open_audio_file(sys.argv[1])
