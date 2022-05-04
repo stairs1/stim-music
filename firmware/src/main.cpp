@@ -20,15 +20,29 @@ using namespace std;
 #define STIM_RATE 20    // Hz
 
 const float STIM_PERIOD = 1000 / STIM_RATE; // milliseconds
-const int dac_buffer_len = STIM_RATE * 3;   // 3-second buffer
+const int dac_buffer_len = STIM_RATE * 5;   // 5-second buffer capacity (circular)
+const int dac_buffer_min = STIM_RATE * 1;   // 1-second ble-stim buffering
 const float v_dac_8_bit_const = 255;
 const float v_dac_8_bit_high = 141;
 const float v_dac_8_bit_low = 186;
 int dac_bufffer[dac_buffer_len];
 int read_ptr = 0;
 int write_ptr = 0;
-bool stimulate = false;
-bool configure = false;
+enum states
+{
+    idle,
+    config_cold,
+    config_warm,
+    stim_cold,
+    stim_warm
+};
+int state = idle;
+
+void set_state(states new_state)
+{
+    Serial.printf("Setting State to %d\n", new_state);
+    state = new_state;
+}
 
 BLEServer *server;
 
@@ -51,30 +65,19 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
     void onWrite(BLECharacteristic *characteristic)
     {
         std::string value = characteristic->getValue();
-        // if (value.length() > 0)
-        // {
-        //     Serial.println("*********");
-        //     //Serial.print("New value: ");
-        //     // for (int i = 0; i < value.length(); i++)
-        //         //Serial.print(value[i]);
-
-        //     //Serial.println();
-        //     //Serial.println("*********");
-        // }
-
-        if (value == "stimulate")
+        if (value == "stim")
         {
             Serial.println("stimulation mode");
             read_ptr = 0;
             write_ptr = 0;
-            configure = false;
-            stimulate = true;
+            set_state(states::stim_cold);
         }
-        else if (value == "inactive")
+        else if (value == "idle")
         {
             Serial.println("inactive mode");
-            stimulate = false;
-            configure = false;
+            read_ptr = 0;
+            write_ptr = 0;
+            set_state(states::idle);
             digitalWrite(LED_PIN, LOW);
             dacWrite(VARIABLE_PIN, 0.5 * (v_dac_8_bit_high - v_dac_8_bit_low) + v_dac_8_bit_low);
         }
@@ -83,8 +86,7 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
             Serial.println("config mode");
             read_ptr = 0;
             write_ptr = 0;
-            stimulate = false;
-            configure = true;
+            set_state(states::config_cold);
         }
         else
         {
@@ -98,13 +100,19 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
                 toConv[2] = '\n';
                 float stimVal = (float)strtol(toConv, 0, 16);
 
-                int dacVal = configure ? stimVal : stimVal / 255.0 * (v_dac_8_bit_high - v_dac_8_bit_low) + v_dac_8_bit_low;
-
-                // Serial.printf("%f\n", stimVal);
-                // Serial.printf("%d\n", dacVal);
+                int dacVal = state == states::config_cold || states::config_warm
+                                 ? stimVal
+                                 : stimVal / 255.0 * (v_dac_8_bit_high - v_dac_8_bit_low) + v_dac_8_bit_low;
 
                 dac_bufffer[write_ptr] = dacVal;
                 write_ptr = (write_ptr + 1) % dac_buffer_len;
+
+                // Return to idle mode instead of overflowing buffer
+                if (write_ptr == read_ptr)
+                {
+                    Serial.println("buffer full, stopping stim");
+                    set_state(states::idle);
+                }
             }
         }
     };
@@ -121,7 +129,7 @@ void setup()
     dacWrite(CONST_PIN, v_dac_8_bit_const);
 
     // Server setup
-    BLEDevice::init("Brain Stimulator 0.0.3");
+    BLEDevice::init("Brain Stimulator 0.0.4");
     server = BLEDevice::createServer();
     server->setCallbacks(new ServerCallbacks());
     server->getAdvertising()->addServiceUUID(SERVICE_UUID);
@@ -144,36 +152,94 @@ void setup()
     server->getAdvertising()->start();
 }
 
-int ticker = 0;
-unsigned long ptime = 0;
+unsigned long start_time;
+unsigned long stims_done = 0;
+unsigned long flashes_done = 0;
 
 void loop()
 {
-    if (ticker % STIM_RATE == 0)
+    switch (state)
     {
-        ticker = 0;
-    }
+        case idle:
+            break;
 
-    // protect against unexpected outputs
-    if (stimulate && (read_ptr != write_ptr))
-    {
-        Serial.printf("DAC value: %d", dac_bufffer[read_ptr]);
-        Serial.println();
-        dacWrite(VARIABLE_PIN, dac_bufffer[read_ptr]);
-        read_ptr = (read_ptr + 1) % dac_buffer_len;
-    }
-    else if (configure && (read_ptr != write_ptr))
-    {
-        int led_value = dac_bufffer[read_ptr] > 128 ? HIGH : LOW;
-        Serial.printf("Configure value : %d\n", led_value);
-        digitalWrite(LED_PIN, led_value);
-        read_ptr = (read_ptr + 1) % dac_buffer_len;
-    }
+        case config_cold:
+        {
+            if (write_ptr > read_ptr + dac_buffer_min)
+            {
+                set_state(config_warm);
+                start_time = millis();
+                flashes_done = 0;
+            }
+            break;
+        }
+        case config_warm:
+        {
+            // Return to idle mode if buffer empties - stay in sync or die
+            if (read_ptr == write_ptr)
+            {
+                Serial.println("Buffer emptied - pausing");
+                set_state(idle);
+                break;
+            }
 
-    unsigned long ctime = millis();
-    // Serial.println(ctime - ptime);
-    ptime = ctime;
+            // stim gradually drifts over time
+            // stims_to_do will = 2 when it has drifted more than the sampling period
+            int flashes_to_do = static_cast<int>((millis() - start_time) / 1000.0 * STIM_RATE) - flashes_done;
+            if (flashes_to_do > 0)
+            {
+                flashes_done += flashes_to_do;
+            }
+            else
+            {
+                delay(STIM_PERIOD / 10);
+                break;
+            }
 
-    ticker++;
-    delay(STIM_PERIOD);
+            // Write LED and increment read pointer
+            int led_value = dac_bufffer[read_ptr] > 128 ? HIGH : LOW;
+            Serial.printf("Configure value : %d\n", led_value);
+            digitalWrite(LED_PIN, led_value);
+            read_ptr = (read_ptr + flashes_to_do) % dac_buffer_len;
+            break;
+        }
+        case stim_cold:
+        {
+            if (write_ptr > read_ptr + dac_buffer_min)
+            {
+                set_state(stim_warm);
+                start_time = millis();
+                stims_done = 0;
+            }
+            break;
+        }
+        case stim_warm:
+        {
+            // Return to idle mode if buffer empties - stay in sync or die
+            if (read_ptr == write_ptr)
+            {
+                Serial.println("Buffer emptied - pausing");
+                set_state(idle);
+                break;
+            }
+            // stim gradually drifts over time
+            // stims_to_do will = 2 when it has drifted more than the sampling period
+            int stims_to_do = static_cast<int>((millis() - start_time) / 1000 * STIM_RATE) - stims_done;
+            if (stims_to_do > 0)
+            {
+                stims_done += stims_to_do;
+            }
+            else
+            {
+                delay(STIM_PERIOD / 10);
+                break;
+            }
+
+            // Write DAC & increment read pointer
+            Serial.printf("DAC value: %d\n", dac_bufffer[read_ptr]);
+            dacWrite(VARIABLE_PIN, dac_bufffer[read_ptr]);
+            read_ptr = (read_ptr + stims_to_do) % dac_buffer_len;
+            break;
+        }
+    }
 }
