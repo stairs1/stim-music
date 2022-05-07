@@ -65,6 +65,12 @@ class Cli(Cmd):
         """
         self.do_calibrate(line)
 
+    def do_stim(self, line):
+        """
+        Enter stim mode. Playing tracks will result in stim happening
+        """
+        stim_thread.stim_mode()
+
     def do_init(self, line):
         """
         Connect to stimulator and initialize audio. Called by default on load
@@ -109,9 +115,20 @@ class Cli(Cmd):
 
     def do_play(self, line):
         """
+        play {numpy audio track} {numpy stim track}
+
         Play audio track with stim track
         """
-        pass
+        try:
+            # audio_file, stim_file = line.split(' ')
+            audio_file = '../tracks/horse.npy'
+            stim_file = '../tracks/horse-stim.npy'
+            audio_track = np.load(audio_file)
+            stim_track = np.load(stim_file)
+            stim_thread.stimulate(list(stim_track))
+            audio_thread.play(audio_track)
+        except FileNotFoundError:
+            print("file not found")
 
 
 stim_thread = StimThread()

@@ -67,6 +67,9 @@ class StimThread(Thread):
     def config(self):
         self.msg_q.put("config")
 
+    def stim_mode(self):
+        self.msg_q.put("stim")
+
 
 def ble_process(msg_q):
     client = StimClient(msg_q)

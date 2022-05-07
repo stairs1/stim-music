@@ -10,7 +10,7 @@ import numpy as np
 
 class AudioThread:
     def __init__(self):
-        self.bitrate = 16000
+        self.bitrate = 48000
         self.audiobuf = b""
         self.p = PyAudio()
         self.stream = self.p.open(
