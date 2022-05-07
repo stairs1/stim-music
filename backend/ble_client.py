@@ -13,17 +13,22 @@ class StimClient:
         self.state = 'off'
         self.peripheral = None
         self.msg_q = msg_q
-        self.kill = False
-
-    def kill(self):
-        self.kill = True
-        self.disconnect()
 
     def async_sender(self):
-        while True and not self.kill:
-            #wait for next chunk in queue and send it
-            msg = self.msg_q.get()
-            self.send_command(msg)
+        try:
+            while True:
+                #wait for next chunk in queue and send it
+                msg = self.msg_q.get(block=True)
+                if msg == "close":
+                    self.disconnect()
+                    break
+                elif msg == "reconnect":
+                    self.connect()
+                else:
+                    self.send_command(msg)
+        except KeyboardInterrupt:
+            print("exiting ble client")
+
 
     def connect(self):
         self.adapter = Adapter.get_adapters()[0]
@@ -48,7 +53,7 @@ class StimClient:
             self.peripheral.disconnect()
 
     def send_command(self, cmd):
-        print("BLE - sending command: {}".format(cmd))
+        # print("BLE - sending command: {}".format(cmd))
         self.peripheral.write_request(SERVICE_UUID, CHARACTERISTIC_UUID, str.encode(cmd))
 
     def send_command_async(self, cmd):
